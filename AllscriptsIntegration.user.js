@@ -248,16 +248,18 @@ function extractTag(text,tag,endTag)
     return text.substr(loc,end+endTag.length-loc);
 }
 
+// Get the text from the OpenEMR form and populate the appropriate Allscripts control.
 function setAddPatientText(asControl,oemrcontrol)
 {
     val=$("#"+oemrcontrol).val();
     $("#"+asAddPatientControls[asControl]).val(val);
 }
 
+// Use the results of the ajax request to OpenEMR to get the patient's demographics
 function processOEMRDemographics(data)
 {
     $("#demoLoading").hide();
-    text=data.responseText;
+    var text=data.responseText;
     text=text.substr(text.indexOf("<form"));
     text=removeTags(text,"img",">");
     text=removeTags(text,"a","</a>");
@@ -295,20 +297,24 @@ function processOEMRDemographics(data)
 }
 function loadDemographicsFromOpenEMR()
 {
-    demoFullURL=GM_getValue("OpenEMR Server")+pages['oemrDemoFull'];
-    loading=$("#demoLoading");
+    var demoFullURL=GM_getValue("OpenEMR Server")+pages['oemrDemoFull'];
+    var loading=$("#demoLoading");
     if(loading.length===0)
         {
             $("#gmOEMRImport").before("<SPAN id='demoLoading' float:right>Loading</SPAN>")    
             loading=$("#demoLoading");
         }
-        loading.show();
-GM_xmlhttpRequest({
-  method: "GET",
-  url:     demoFullURL,
-  onload: processOEMRDemographics
-});
+    loading.show();
+    GM_xmlhttpRequest({
+    method: "GET",
+    url:     demoFullURL,
+    onload: processOEMRDemographics
+    });
 }
+
+
+
+// Put the control to request patient data from OpenEMR on the Allscripts form.
 function asAddPatientUpdate()
 {
 
@@ -319,6 +325,48 @@ function asAddPatientUpdate()
 
     $("#gmOEMRImport").click(loadDemographicsFromOpenEMR);
 }
+
+function OpenEMRDemographics()
+{
+                resetInfo();
+                var location = window.location.href;
+                var server=location.substr(0,location.indexOf(pages['oemrDemo']));
+                GM_setValue("OpenEMR Server",server);
+                
+                var whoDIV=$("td.label:contains('DOB:')").parents("div.tab");
+
+                var DOB=whoDIV.find("td.label:contains('DOB:')").next();
+                setOEMRDOB(DOB.text());
+                var Gender=whoDIV.find("td.label:contains('Sex:')").next();
+                
+               
+                var patName=$("span.title").text();
+                var splitName=patName.replace(" ","").split(",");
+                var fname=splitName[1];
+                var lname=splitName[0];
+
+                var patIDHREF=$("span:contains('Delete')").parent("a.css_button[href]").attr("href");
+                var deleterHREFInfo="../deleter.php?patient=";
+                var loc=patIDHREF.indexOf("deleterHREFInfo")+deleterHREFInfo.length+1;
+                var patID=parseInt(patIDHREF.substr(loc));
+
+                GM_setValue("patientPID",patID);
+                GM_setValue("patientFNAME",fname);
+                GM_setValue("patientLNAME",lname);                
+                
+}
+
+function OpenEMRAddLink()
+{
+    var allScriptsLink=$("<a id='gmASLink' class='css_button_small' style='float:right;'>"+"<span>Allscripts</span>"+"</a>");
+    $("#current_patient_block").append(allScriptsLink);
+    allScriptsLink.click(function()
+        {
+            var winAS=window.open("https://eprescribe.allscripts.com/default.aspx","Allscripts");
+            GM_setValue("searchState","not found");
+        });  
+}
+
 var loc=window.location.href;
 if(loc.indexOf(pages['interstitial'])>=0)
     {
@@ -338,66 +386,22 @@ if((loc.toLowerCase().indexOf(pages['def'])>=0) || (loc.indexOf(pages['Login'])>
     }
 
 
-if(loc.indexOf(pages['addPatient'])>=0)
-    {
-        $(document).ready(asAddPatientUpdate)
-    }
-if(loc.indexOf(pages['oemrMain'])>=0)
-    {
-        $(document).ready
-        (
-            function()
-            {
-                var allScriptsLink=$("<a id='gmASLink' class='css_button_small' style='float:right;'>"+"<span>Allscripts</span>"+"</a>");
-                $("#current_patient_block").append(allScriptsLink);
-                allScriptsLink.click(function()
-                    {
-                        var winAS=window.open("https://eprescribe.allscripts.com/default.aspx","Allscripts");
-                        GM_setValue("searchState","not found");
-                    });
 
-                
-            }
-        )
-    }
+handlers=[
+            {location: pages['oemrDemo'],  handler: OpenEMRDemographics },
+            {location: pages['oemrMain'],  handler: OpenEMRAddLink },
+            {location: pages['addPatient'], handler: asAddPatientUpdate}
+          ];
 
-pos=loc.indexOf(pages['oemrDemo']);
-if(pos>=0)
-    {
-        
-        $(document).ready(
-            function()
-            {
-                resetInfo();
-                server=loc.substr(0,pos);
-                GM_setValue("OpenEMR Server",server);
-                
-                whoDIV=$("td.label:contains('DOB:')").parents("div.tab");
-
-                DOB=whoDIV.find("td.label:contains('DOB:')").next();
-                setOEMRDOB(DOB.text());
-                Gender=whoDIV.find("td.label:contains('Sex:')").next();
-                
-               
-                patName=$("span.title").text();
-                splitName=patName.replace(" ","").split(",");
-                fname=splitName[1];
-                lname=splitName[0];
-
-                patIDHREF=$("span:contains('Delete')").parent("a.css_button[href]").attr("href");
-                deleterHREFInfo="../deleter.php?patient=";
-                loc=patIDHREF.indexOf("deleterHREFInfo")+deleterHREFInfo.length+1;
-                patID=parseInt(patIDHREF.substr(loc));
-
-                GM_setValue("patientPID",patID);
-                GM_setValue("patientFNAME",fname);
-                GM_setValue("patientLNAME",lname);                
-
-
-
-                
-            }
-        );
-       
-
-    }
+function dispatch(location)
+{
+    for(var dispatchIdx=0;dispatchIdx<handlers.length;dispatchIdx++)
+        {
+            var dispatchEntry=handlers[dispatchIdx];
+            if(location.indexOf(dispatchEntry.location)>=0)
+                {
+                    $(document).ready(dispatchEntry.handler);
+                }
+        }
+}
+dispatch(loc);
