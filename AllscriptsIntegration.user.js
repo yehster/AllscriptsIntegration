@@ -118,6 +118,17 @@ function safeClick(id)
 
 }
 
+function safeFocusVal(id,value)
+{
+        var element = document.getElementById(id);
+        if (element !== null)
+        {
+            element.focus();
+            element.value=value;
+        }
+    
+}
+
 function patDOB()
 {
     retVal=GM_getValue("patientDOBMonth");
@@ -131,24 +142,25 @@ function patDOB()
 
 function asPopulateAndSearchPatientInfo()
 {
+    
+//    window.alert("Pause");
+    safeFocusVal(asContID['txtPatLNAME'],GM_getValue("patientLNAME"));
 
-    $("#"+asContID['txtPatLNAME']).val(GM_getValue("patientLNAME")).blur();
-    $("#"+asContID['ctl00_ContentPlaceHolder1_PatientSearch_txtFirstName_ClientState']).val(GM_getValue("patientFNAME")).blur();
-    $("#"+asContID['txtPatFNAME']).val(GM_getValue("patientFNAME")).blur();
+
+    safeFocusVal(asContID['txtPatFNAME'],GM_getValue("patientFNAME"));    
     
     GM_setValue("searchState","searching") ;
     safeClick(asContID['btnSearch']);
-    
 }
 
 function asFindPatientInResults()
 {
-    myHTML=$(this).html();
-    foundPatient=myHTML.indexOf(GM_getValue("patientLNAME")+", "+GM_getValue("patientFNAME"));
+    var myHTML=$(this).html();
+    var foundPatient=myHTML.indexOf(GM_getValue("patientLNAME")+", "+GM_getValue("patientFNAME"));
     if(foundPatient>=0)
         {
 
-            foundDOB=myHTML.indexOf(patDOB(),foundPatient);
+            var foundDOB=myHTML.indexOf(patDOB(),foundPatient);
             if(foundDOB>=0)
                 {
                     rowID=$(this).find("input[id]").attr("id");                    
@@ -159,8 +171,8 @@ function asFindPatientInResults()
 
 function asCheckPatientInfo()
 {
-    pn=$("#"+asContID['lblPatientName']).text();
-    foundPatient=pn.indexOf(GM_getValue("patientLNAME")+", "+GM_getValue("patientFNAME"));
+    var pn=$("#"+asContID['lblPatientName']).text();
+    var foundPatient=pn.indexOf(GM_getValue("patientLNAME")+", "+GM_getValue("patientFNAME"));
     if(foundPatient===0)
         {
             DOB=$("#"+asContID['lblGenderDOB']).text();
@@ -173,6 +185,15 @@ function asCheckPatientInfo()
         }
 
 }
+function asAddOpenEMRSearch()
+{
+    var addPtButton=$("#ctl00_ContentPlaceHolder1_PatientSearch_AddPanel");
+    var openSearch=$("<input type='button' id='openemr_search' value='OpenEMR '/>");
+    openSearch.click(asPopulateAndSearchPatientInfo);
+    var searchTd=$("<td></td>");
+    searchTd.append(openSearch);
+    addPtButton.after(openSearch);
+}
 function asSearchDispatcher()
 {
         if($("#txtUserName").length>0)
@@ -180,16 +201,12 @@ function asSearchDispatcher()
                 // This is the initial login screen and we should just abort.
                 return;
             }
-            
+       asAddOpenEMRSearch();     
        asCheckPatientInfo();
-       if(GM_getValue("searchState").indexOf("not found")==0)
+      
+        if(GM_getValue("searchState").indexOf("searching")==0)
         {
-            asPopulateAndSearchPatientInfo();
-        }
-        if((GM_getValue("searchState").indexOf("searching")==0) || 
-        (GM_getValue("searchState").indexOf("results scanning")==0))
-        {
-            tblViewPatients=$("#"+asContID['tblViewPatients']);
+            var tblViewPatients=$("#"+asContID['tblViewPatients']);
             if(tblViewPatients.length>0)
             {
                 GM_setValue("searchState","results scanning")
@@ -197,6 +214,12 @@ function asSearchDispatcher()
                 rows.each(asFindPatientInResults);
             }
         }    
+        
+      else if(GM_getValue("searchState").indexOf("not found")==0)
+        {
+            asPopulateAndSearchPatientInfo();
+     
+        }
 }
 
 var asAddPatientControls={
@@ -281,14 +304,14 @@ function processOEMRDemographics(data)
     setAddPatientText('txtPatMobilePhone',"form_phone_cell");
 
 
-    sex=$("#form_sex").val();
-    state=$("#form_state").val();
+    var sex=$("#form_sex").val();
+    var state=$("#form_state").val();
       
     
     chooseSelect(asAddPatientControls['selGender'],sex[0]);
     chooseSelect(asAddPatientControls['selState'],state)
 
-    dob=$("#form_DOB").val();
+    var dob=$("#form_DOB").val();
     setOEMRDOB(dob);
     safeFocus(asAddPatientControls['txtPatDOB']);
     $("#"+asAddPatientControls['txtPatDOB']).val(patDOB());
@@ -359,10 +382,28 @@ function OpenEMRDemographics()
 function OpenEMRAddLink()
 {
     var allScriptsLink=$("<a id='gmASLink' class='css_button_small' style='float:right;'>"+"<span>Allscripts</span>"+"</a>");
-    $("#current_patient_block").append(allScriptsLink);
+    var targetCB=$("<input type='checkbox' id='gmASChoice' title='Open Allscripts in New Window'/>");
+    $("#current_patient_block").append(allScriptsLink).append(targetCB);
     allScriptsLink.click(function()
         {
-            var winAS=window.open("https://eprescribe.allscripts.com/default.aspx","Allscripts");
+            if($("#gmASChoice:checked").length===0)
+                {
+                    if(window.top.left_nav.document.forms[0].cb_bot.checked)
+                    {
+                        window.top.RBot.location="https://eprescribe.allscripts.com/SearchPatient.aspx";                    
+                        window.top.left_nav.botName='All2';
+                    }
+                    else
+                    {
+                        window.top.RTop.location="https://eprescribe.allscripts.com/SearchPatient.aspx";  
+                        window.top.left_nav.topName='All2';
+                    }                    
+                }
+                else
+                {
+                    var winAS=window.open("https://eprescribe.allscripts.com/SearchPatient.aspx","Allscripts");
+                    winAS.focus();        
+                }
             GM_setValue("searchState","not found");
         });  
 }
@@ -378,11 +419,13 @@ if(loc.indexOf(pages['interstitial'])>=0)
     
     }
 
+if(loc.indexOf("SelectAccountAndSite.aspx")>=0)
+{
 
-
-if((loc.toLowerCase().indexOf(pages['def'])>=0) || (loc.indexOf(pages['Login'])>=0) || (loc.indexOf(pages['search'])>=0) )
+}
+else if((loc.indexOf(pages['Login'])>=0) || (loc.indexOf(pages['search'])>=0) || (loc.indexOf("https://eprescribe.allscripts.com/")>=0) )
     {
-        $(document).ready(asSearchDispatcher);
+        $(window).load(asSearchDispatcher);
     }
 
 
